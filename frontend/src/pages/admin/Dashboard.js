@@ -10,6 +10,16 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [products, setProducts] = useState([]);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    description: '',
+    category: 'dairy',
+    price: { amount: '', unit: 'liter' },
+    stock: { quantity: '', unit: 'liters' },
+    farmingMethod: 'organic'
+  });
 
   useEffect(() => {
     fetchDashboardData();
@@ -27,6 +37,13 @@ const AdminDashboard = () => {
         setFarmers(data.farmers || []);
         setUsers(data.users || []);
         setOrders(data.orders || []);
+      }
+      
+      // Fetch products
+      const productsRes = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products`);
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        setProducts(productsData.products || []);
       }
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
@@ -71,6 +88,64 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       toast.error('Failed to update user status');
+    }
+  };
+
+  const handleAddProduct = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          ...newProduct,
+          images: [{ url: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&h=400&fit=crop' }],
+          farmingDetails: { method: newProduct.farmingMethod, isOrganic: newProduct.farmingMethod === 'organic' },
+          freshness: { harvestDate: new Date(), freshnessScore: 95 },
+          rating: { average: 4.5, count: 0 }
+        })
+      });
+
+      if (response.ok) {
+        toast.success('Product added successfully');
+        setShowAddProduct(false);
+        setNewProduct({
+          name: '',
+          description: '',
+          category: 'dairy',
+          price: { amount: '', unit: 'liter' },
+          stock: { quantity: '', unit: 'liters' },
+          farmingMethod: 'organic'
+        });
+        fetchDashboardData();
+      } else {
+        toast.error('Failed to add product');
+      }
+    } catch (error) {
+      toast.error('Failed to add product');
+    }
+  };
+
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) return;
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products/${productId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      if (response.ok) {
+        toast.success('Product deleted successfully');
+        fetchDashboardData();
+      } else {
+        toast.error('Failed to delete product');
+      }
+    } catch (error) {
+      toast.error('Failed to delete product');
     }
   };
 
@@ -142,7 +217,7 @@ const AdminDashboard = () => {
         <div className="bg-white rounded-lg shadow">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
-              {['overview', 'farmers', 'users', 'orders', 'analytics', 'commission'].map(tab => (
+              {['overview', 'products', 'farmers', 'users', 'orders', 'analytics', 'commission'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -218,6 +293,152 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'products' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Product Management</h3>
+                  <button
+                    onClick={() => setShowAddProduct(true)}
+                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                  >
+                    + Add Product
+                  </button>
+                </div>
+
+                {showAddProduct && (
+                  <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+                      <h3 className="text-lg font-semibold mb-4">Add New Product</h3>
+                      <form onSubmit={handleAddProduct} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Product Name</label>
+                          <input
+                            type="text"
+                            required
+                            value={newProduct.name}
+                            onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                            className="w-full p-2 border rounded"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Description</label>
+                          <textarea
+                            required
+                            value={newProduct.description}
+                            onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
+                            className="w-full p-2 border rounded"
+                            rows="3"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Price (₹)</label>
+                            <input
+                              type="number"
+                              required
+                              value={newProduct.price.amount}
+                              onChange={(e) => setNewProduct({...newProduct, price: {...newProduct.price, amount: e.target.value}})}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Stock Quantity</label>
+                            <input
+                              type="number"
+                              required
+                              value={newProduct.stock.quantity}
+                              onChange={(e) => setNewProduct({...newProduct, stock: {...newProduct.stock, quantity: e.target.value}})}
+                              className="w-full p-2 border rounded"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Farming Method</label>
+                          <select
+                            value={newProduct.farmingMethod}
+                            onChange={(e) => setNewProduct({...newProduct, farmingMethod: e.target.value})}
+                            className="w-full p-2 border rounded"
+                          >
+                            <option value="organic">Organic</option>
+                            <option value="natural">Natural</option>
+                          </select>
+                        </div>
+                        <div className="flex space-x-3">
+                          <button
+                            type="submit"
+                            className="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700"
+                          >
+                            Add Product
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddProduct(false)}
+                            className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {products.map(product => (
+                        <tr key={product._id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <img
+                                src={product.images?.[0]?.url}
+                                alt={product.name}
+                                className="w-10 h-10 rounded object-cover mr-3"
+                              />
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                                <div className="text-sm text-gray-500">{product.category}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ₹{product.price.amount}/{product.price.unit}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {product.stock.quantity} {product.stock.unit}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              product.farmingDetails?.isOrganic ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {product.farmingDetails?.method}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => handleDeleteProduct(product._id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
