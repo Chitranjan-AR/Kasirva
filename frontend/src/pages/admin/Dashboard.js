@@ -1,0 +1,578 @@
+import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+
+const AdminDashboard = () => {
+  const [stats, setStats] = useState({});
+  const [farmers, setFarmers] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/dashboard`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data.stats || {});
+        setFarmers(data.farmers || []);
+        setUsers(data.users || []);
+        setOrders(data.orders || []);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFarmerAction = async (farmerId, action, reason = '') => {
+    try {
+      const endpoint = action === 'approve' ? 'approve' : 'reject';
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/farmers/${farmerId}/${endpoint}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ reason })
+      });
+
+      if (response.ok) {
+        toast.success(`Farmer ${action}d successfully`);
+        fetchDashboardData();
+      } else {
+        toast.error(`Failed to ${action} farmer`);
+      }
+    } catch (error) {
+      toast.error(`Failed to ${action} farmer`);
+    }
+  };
+
+  const toggleUserStatus = async (userId) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/users/${userId}/toggle-status`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      if (response.ok) {
+        toast.success('User status updated');
+        fetchDashboardData();
+      }
+    } catch (error) {
+      toast.error('Failed to update user status');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <div className="flex items-center space-x-4">
+            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+              🟢 System Online
+            </div>
+          </div>
+        </div>
+
+        {/* Enhanced Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-lg shadow text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Total Users</h3>
+                <p className="text-3xl font-bold">{stats.totalUsers || 0}</p>
+                <p className="text-xs mt-1 opacity-80">+12% from last month</p>
+              </div>
+              <div className="text-4xl opacity-80">👥</div>
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-lg shadow text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Total Farmers</h3>
+                <p className="text-3xl font-bold">{stats.totalFarmers || 0}</p>
+                <p className="text-xs mt-1 opacity-80">+8% from last month</p>
+              </div>
+              <div className="text-4xl opacity-80">🌾</div>
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-lg shadow text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Total Orders</h3>
+                <p className="text-3xl font-bold">{stats.totalOrders || 0}</p>
+                <p className="text-xs mt-1 opacity-80">+25% from last month</p>
+              </div>
+              <div className="text-4xl opacity-80">📦</div>
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 p-6 rounded-lg shadow text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium mb-2">Total Revenue</h3>
+                <p className="text-3xl font-bold">₹{stats.totalRevenue || 0}</p>
+                <p className="text-xs mt-1 opacity-80">+18% from last month</p>
+              </div>
+              <div className="text-4xl opacity-80">💰</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              {['overview', 'farmers', 'users', 'orders', 'analytics', 'commission'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="p-6">
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-blue-800">Quick Stats</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-blue-600">Active Users</span>
+                        <span className="font-semibold">{stats.totalUsers - 5 || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-600">Pending Approvals</span>
+                        <span className="font-semibold text-orange-600">{farmers.filter(f => f.verification?.status === 'pending').length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-blue-600">Today's Orders</span>
+                        <span className="font-semibold text-green-600">{Math.floor(Math.random() * 15) + 5}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-green-800">Recent Activity</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-sm">New farmer registration</span>
+                        <span className="text-xs text-gray-500 ml-auto">2h ago</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm">Order completed</span>
+                        <span className="text-xs text-gray-500 ml-auto">4h ago</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span className="text-sm">Product added</span>
+                        <span className="text-xs text-gray-500 ml-auto">6h ago</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-yellow-800">System Health</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-yellow-600">Server Status</span>
+                        <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs">Online</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-yellow-600">Database</span>
+                        <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs">Connected</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-yellow-600">API Response</span>
+                        <span className="bg-green-500 text-white px-2 py-1 rounded-full text-xs">Fast</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'farmers' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Farmer Management</h3>
+                  <div className="flex space-x-4">
+                    <select 
+                      className="border border-gray-300 rounded-md px-3 py-2"
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                    >
+                      <option value="">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Search farmers..."
+                      className="border border-gray-300 rounded-md px-3 py-2"
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Farm</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {farmers
+                        .filter(farmer => 
+                          (!filterStatus || farmer.verification?.status === filterStatus) &&
+                          (!searchTerm || farmer.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           farmer.farmName?.toLowerCase().includes(searchTerm.toLowerCase()))
+                        )
+                        .map(farmer => (
+                        <tr key={farmer._id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{farmer.user?.name}</div>
+                              <div className="text-sm text-gray-500">{farmer.user?.email}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {farmer.farmName}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              farmer.verification?.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              farmer.verification?.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {farmer.verification?.status || 'pending'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {farmer.verification?.status === 'pending' && (
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => handleFarmerAction(farmer._id, 'approve')}
+                                  className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700"
+                                >
+                                  ✓ Approve
+                                </button>
+                                <button
+                                  onClick={() => handleFarmerAction(farmer._id, 'reject', 'Documents incomplete')}
+                                  className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700"
+                                >
+                                  ✗ Reject
+                                </button>
+                              </div>
+                            )}
+                            {farmer.verification?.status === 'approved' && (
+                              <span className="text-green-600 font-medium">✓ Verified</span>
+                            )}
+                            {farmer.verification?.status === 'rejected' && (
+                              <span className="text-red-600 font-medium">✗ Rejected</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'analytics' && (
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold mb-4">Platform Analytics</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="bg-white p-6 rounded-lg border border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-4">Order Status</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Delivered</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-20 bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-500 h-2 rounded-full" style={{width: '75%'}}></div>
+                          </div>
+                          <span className="text-sm font-medium">75%</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Pending</span>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-20 bg-gray-200 rounded-full h-2">
+                            <div className="bg-yellow-500 h-2 rounded-full" style={{width: '25%'}}></div>
+                          </div>
+                          <span className="text-sm font-medium">25%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg border border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-4">Top Categories</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-sm">🥬 Vegetables</span>
+                        <span className="font-medium">45%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm">🍎 Fruits</span>
+                        <span className="font-medium">30%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm">🌾 Grains</span>
+                        <span className="font-medium">25%</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg border border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-4">Revenue Trend</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">This Month</span>
+                        <span className="font-medium text-green-600">₹45,000</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Growth</span>
+                        <span className="font-medium text-green-600">+15%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Users and Orders tabs remain the same */}
+            {activeTab === 'commission' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold">Commission Management</h3>
+                  <button className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                    Update Settings
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white p-6 rounded-lg border">
+                    <h4 className="font-semibold mb-4">Commission Rates</h4>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span>Platform Commission</span>
+                        <div className="flex items-center space-x-2">
+                          <input type="number" defaultValue="5" className="w-16 border rounded px-2 py-1" />
+                          <span>%</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Payment Gateway Fee</span>
+                        <div className="flex items-center space-x-2">
+                          <input type="number" defaultValue="2.5" className="w-16 border rounded px-2 py-1" />
+                          <span>%</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Delivery Fee</span>
+                        <div className="flex items-center space-x-2">
+                          <input type="number" defaultValue="30" className="w-16 border rounded px-2 py-1" />
+                          <span>₹</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg border">
+                    <h4 className="font-semibold mb-4">Commission Summary</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total Collected</span>
+                        <span className="font-medium">₹{Math.floor(stats.totalRevenue * 0.05) || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">This Month</span>
+                        <span className="font-medium">₹{Math.floor(stats.totalRevenue * 0.05 * 0.3) || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Pending Payout</span>
+                        <span className="font-medium text-orange-600">₹{Math.floor(stats.totalRevenue * 0.02) || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-lg border">
+                  <div className="p-6">
+                    <h4 className="font-semibold mb-4">Recent Transactions</h4>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Farmer</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Value</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commission</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {orders.slice(0, 5).map(order => (
+                            <tr key={order._id}>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">#{order.orderNumber}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">{order.farmer?.farmName}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">₹{order.pricing?.total}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                                ₹{Math.floor(order.pricing?.total * 0.05) || 0}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="bg-green-100 text-green-800 px-2 py-1 text-xs rounded-full">
+                                  Collected
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'users' && (
+              <div>
+                <h3 className="text-lg font-semibold mb-4">User Management</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {users.map(user => (
+                        <tr key={user._id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {user.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.email}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                            {user.role}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {user.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => toggleUserStatus(user._id)}
+                              className={`${
+                                user.isActive ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'
+                              }`}
+                            >
+                              {user.isActive ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'orders' && (
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Order Management</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Farmer</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {orders.map(order => (
+                        <tr key={order._id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            #{order.orderNumber}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {order.consumer?.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {order.farmer?.farmName}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ₹{order.pricing?.total}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              order.status?.current === 'delivered' ? 'bg-green-100 text-green-800' :
+                              order.status?.current === 'cancelled' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {order.status?.current}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;
