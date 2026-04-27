@@ -1,213 +1,246 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import ReviewSystem from '../../components/common/ReviewSystem';
 import toast from 'react-hot-toast';
 
+const FALLBACK_IMAGES = {
+  'fresh-milk':    'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&h=500&fit=crop&auto=format',
+  'flavored-milk': 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=600&h=500&fit=crop&auto=format',
+  'butter-cream':  'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=600&h=500&fit=crop&auto=format',
+  'paneer-cheese': 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=600&h=500&fit=crop&auto=format',
+  'ghee':          'https://images.unsplash.com/photo-1481391243133-f96216dcb5d2?w=600&h=500&fit=crop&auto=format',
+  'curd-dahi':     'https://images.unsplash.com/photo-1571212515416-fef01fc43637?w=600&h=500&fit=crop&auto=format',
+  'drinks':        'https://images.unsplash.com/photo-1623065422902-30a2d299bbe4?w=600&h=500&fit=crop&auto=format',
+  'default':       'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&h=500&fit=crop&auto=format',
+};
+
 const ProductDetails = () => {
   const { id } = useParams();
-  const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [product, setProduct]   = useState(null);
+  const [loading, setLoading]   = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [imgSrc, setImgSrc]     = useState('');
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products/${id}`);
-        const data = await response.json();
+        const res  = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products/${id}`);
+        
+        if (!res.ok) {
+          throw new Error(`API error: ${res.status} ${res.statusText}`);
+        }
+        
+        const data = await res.json();
         setProduct(data);
+        const url = data.images?.[0]?.url;
+        setImgSrc(url && url.startsWith('http') ? url : FALLBACK_IMAGES[data.subcategory] || FALLBACK_IMAGES.default);
       } catch (error) {
+        console.error('Product details fetch error:', error);
         toast.error('Failed to fetch product details');
       } finally {
         setLoading(false);
       }
     };
-
     fetchProduct();
   }, [id]);
 
-  const handleAddToCart = () => {
-    addToCart(product, quantity);
-    toast.success(`${quantity} ${product.price.unit} of ${product.name} added to cart`);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+  if (loading) return (
+    <div className="min-h-screen bg-grass-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-12 h-12 border-4 border-grass-200 border-t-grass-600 rounded-full animate-spin" />
+        <p className="text-grass-600 text-sm">Loading product...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (!product) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Product not found</h2>
-          <Link to="/products" className="text-green-600 hover:text-green-800">
-            ← Back to Products
-          </Link>
-        </div>
+  if (!product) return (
+    <div className="min-h-screen bg-grass-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-5xl mb-4">🥛</div>
+        <h2 className="text-xl font-bold text-grass-900 mb-3">Product not found</h2>
+        <Link to="/products" className="btn-primary text-sm">← Back to Products</Link>
       </div>
-    );
-  }
+    </div>
+  );
+
+  const outOfStock = product.stock?.quantity === 0;
+  const inWish     = isInWishlist(product._id);
+  const total      = (product.price?.amount * quantity).toFixed(2);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-grass-50 py-6">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <Link to="/products" className="text-green-600 hover:text-green-800 mb-6 inline-block">
-          ← Back to Products
-        </Link>
 
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-8">
-            {/* Product Image */}
-            <div>
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-grass-500 mb-5">
+          <Link to="/" className="hover:text-grass-700">Home</Link>
+          <span>/</span>
+          <Link to="/products" className="hover:text-grass-700">Products</Link>
+          <span>/</span>
+          <span className="text-grass-800 font-medium truncate">{product.name}</span>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-grass-100 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+
+            {/* ── Image Panel ── */}
+            <div className="relative bg-grass-50 flex items-center justify-center min-h-[320px] lg:min-h-[480px] overflow-hidden">
               <img
-                src={product.images?.[0]?.url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&h=400&fit=crop'}
+                src={imgSrc}
                 alt={product.name}
-                className="w-full h-96 object-cover rounded-lg"
+                className="w-full h-full object-cover"
+                onError={() => setImgSrc(FALLBACK_IMAGES[product.subcategory] || FALLBACK_IMAGES.default)}
               />
-            </div>
-
-            {/* Product Info */}
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">{product.name}</h1>
-              
-              <div className="flex items-center mb-4">
-                <span className="text-3xl font-bold text-green-600">
-                  ₹{product.price.amount}/{product.price.unit}
-                </span>
-                {product.farmingDetails.isOrganic && (
-                  <span className="ml-4 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
-                    Organic Certified
+              {/* Overlay badges */}
+              <div className="absolute top-4 left-4 flex flex-col gap-2">
+                {product.farmingDetails?.isOrganic && (
+                  <span className="bg-grass-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+                    🌿 Organic Certified
+                  </span>
+                )}
+                {outOfStock && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
+                    Out of Stock
                   </span>
                 )}
               </div>
+              {/* Freshness badge */}
+              {product.freshness?.freshnessScore && (
+                <div className="absolute bottom-4 right-4 bg-white rounded-xl px-3 py-2 shadow-md border border-grass-100 text-center">
+                  <p className="text-grass-700 font-extrabold text-lg leading-none">{product.freshness.freshnessScore}%</p>
+                  <p className="text-grass-500 text-xs">Freshness</p>
+                </div>
+              )}
+            </div>
 
-              <div className="flex items-center mb-4">
-                <span className="text-yellow-400 text-lg">★★★★★</span>
-                <span className="ml-2 text-gray-600">
-                  {product.rating.average.toFixed(1)} ({product.rating.count} reviews)
+            {/* ── Info Panel ── */}
+            <div className="p-6 lg:p-8 flex flex-col">
+              <p className="text-grass-500 text-xs font-semibold uppercase tracking-widest mb-1 capitalize">
+                {product.subcategory?.replace('-', ' ') || 'Dairy'}
+              </p>
+              <h1 className="text-2xl font-extrabold text-grass-900 mb-3 leading-tight">{product.name}</h1>
+
+              {/* Rating */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex text-yellow-400">
+                  {[1,2,3,4,5].map(s => (
+                    <span key={s} className={s <= Math.round(product.rating?.average || 4) ? 'text-yellow-400' : 'text-grass-200'}>★</span>
+                  ))}
+                </div>
+                <span className="text-sm text-grass-600 font-medium">
+                  {(product.rating?.average || 4).toFixed(1)} ({product.rating?.count || 0} reviews)
                 </span>
               </div>
 
-              <p className="text-gray-700 mb-6">{product.description}</p>
-
-              {/* Product Details */}
-              <div className="space-y-3 mb-6">
-                <div className="flex justify-between">
-                  <span className="font-medium">Category:</span>
-                  <span className="capitalize">{product.category}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Farming Method:</span>
-                  <span className="capitalize">{product.farmingDetails.method}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Stock Available:</span>
-                  <span>{product.stock.quantity} {product.stock.unit}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Freshness Score:</span>
-                  <span className="text-green-600 font-semibold">{product.freshness.freshnessScore}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Harvest Date:</span>
-                  <span>{new Date(product.freshness.harvestDate).toLocaleDateString()}</span>
-                </div>
+              {/* Price */}
+              <div className="flex items-baseline gap-2 mb-4">
+                <span className="text-3xl font-extrabold text-grass-700">₹{product.price?.amount}</span>
+                <span className="text-grass-500 text-sm">per {product.price?.unit}</span>
               </div>
 
-              {/* Quantity Selector */}
-              <div className="flex items-center space-x-4 mb-6">
-                <span className="font-medium">Quantity:</span>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300"
-                  >
-                    -
-                  </button>
-                  <span className="w-12 text-center font-semibold">{quantity}</span>
-                  <button
-                    onClick={() => setQuantity(Math.min(product.stock.quantity, quantity + 1))}
-                    className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300"
-                  >
-                    +
-                  </button>
-                </div>
-                <span className="text-gray-500">{product.price.unit}</span>
+              <p className="text-grass-700 text-sm leading-relaxed mb-5">{product.description}</p>
+
+              {/* Details grid */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {[
+                  { label: 'Category',       value: product.category },
+                  { label: 'Method',         value: product.farmingDetails?.method },
+                  { label: 'Stock',          value: `${product.stock?.quantity} ${product.stock?.unit}` },
+                  { label: 'Harvest Date',   value: product.freshness?.harvestDate ? new Date(product.freshness.harvestDate).toLocaleDateString('en-IN') : 'Today' },
+                ].map(d => (
+                  <div key={d.label} className="bg-grass-50 rounded-xl p-3 border border-grass-100">
+                    <p className="text-xs text-grass-500 mb-0.5">{d.label}</p>
+                    <p className="text-sm font-semibold text-grass-800 capitalize">{d.value}</p>
+                  </div>
+                ))}
               </div>
 
-              {/* Add to Cart */}
-              <div className="flex items-center space-x-4 mb-4">
+              {/* Quantity */}
+              <div className="flex items-center gap-4 mb-5">
+                <span className="text-sm font-semibold text-grass-700">Quantity:</span>
+                <div className="flex items-center border border-grass-200 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                    className="w-10 h-10 flex items-center justify-center text-grass-700 hover:bg-grass-50 font-bold text-lg transition-colors"
+                  >−</button>
+                  <span className="w-12 text-center font-bold text-grass-900">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(q => Math.min(product.stock?.quantity || 99, q + 1))}
+                    className="w-10 h-10 flex items-center justify-center text-grass-700 hover:bg-grass-50 font-bold text-lg transition-colors"
+                  >+</button>
+                </div>
+                <span className="text-sm text-grass-500">{product.price?.unit}</span>
+              </div>
+
+              {/* Total */}
+              <div className="bg-grass-50 rounded-xl p-4 border border-grass-100 mb-5 flex items-center justify-between">
+                <span className="text-sm font-semibold text-grass-700">Total Amount</span>
+                <span className="text-2xl font-extrabold text-grass-700">₹{total}</span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    if (isInWishlist(product._id)) {
-                      removeFromWishlist(product._id);
-                      toast.success('Removed from wishlist');
-                    } else {
-                      addToWishlist(product);
-                      toast.success('Added to wishlist');
-                    }
+                    if (inWish) { removeFromWishlist(product._id); toast.success('Removed from wishlist'); }
+                    else        { addToWishlist(product);          toast.success('Added to wishlist ❤️'); }
                   }}
-                  className={`p-3 rounded-lg border-2 ${isInWishlist(product._id) ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-300 bg-white text-gray-600'} hover:bg-opacity-80`}
+                  className={`px-4 py-3 rounded-xl border-2 font-semibold text-sm transition-all ${
+                    inWish
+                      ? 'border-red-400 bg-red-50 text-red-600'
+                      : 'border-grass-200 bg-white text-grass-600 hover:border-grass-400'
+                  }`}
                 >
-                  {isInWishlist(product._id) ? '❤️ Saved' : '🤍 Save'}
+                  {inWish ? '❤️ Saved' : '🤍 Save'}
                 </button>
-              </div>
-              <div className="flex space-x-4">
                 <button
-                  onClick={handleAddToCart}
-                  disabled={product.stock.quantity === 0}
-                  className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={() => { addToCart(product, quantity); toast.success(`Added to cart! 🛒`); }}
+                  disabled={outOfStock}
+                  className="flex-1 py-3 rounded-xl border-2 border-grass-700 text-grass-700 font-bold text-sm hover:bg-grass-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {product.stock.quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
+                  {outOfStock ? 'Out of Stock' : '🛒 Add to Cart'}
                 </button>
-                <Link
-                  to="/cart"
-                  className="bg-gray-200 text-gray-800 py-3 px-6 rounded-lg hover:bg-gray-300 transition-colors"
+                <button
+                  onClick={() => {
+                    addToCart(product, quantity);
+                    navigate('/checkout');
+                  }}
+                  disabled={outOfStock}
+                  className="flex-1 py-3 rounded-xl bg-grass-700 text-white font-bold text-sm hover:bg-grass-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
                 >
-                  View Cart
-                </Link>
-              </div>
-
-              {/* Total Price */}
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">Total Price:</span>
-                  <span className="text-2xl font-bold text-green-600">
-                    ₹{(product.price.amount * quantity).toFixed(2)}
-                  </span>
-                </div>
+                  {outOfStock ? 'Out of Stock' : '⚡ Buy Now'}
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Reviews Section */}
-          <div className="border-t border-gray-200 p-8">
-            <ReviewSystem 
-              productId={product._id} 
-              currentRating={product.rating.average} 
-              reviewCount={product.rating.count} 
+          {/* Reviews */}
+          <div className="border-t border-grass-100 p-6 lg:p-8">
+            <ReviewSystem
+              productId={product._id}
+              currentRating={product.rating?.average}
+              reviewCount={product.rating?.count}
             />
           </div>
+
           {/* Farmer Info */}
-          <div className="border-t border-gray-200 p-8">
-            <h3 className="text-xl font-bold mb-4">About the Farmer</h3>
-            <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                <span className="text-2xl">👨‍🌾</span>
+          <div className="border-t border-grass-100 p-6 lg:p-8">
+            <h3 className="text-base font-bold text-grass-900 mb-4">👨‍🌾 About the Farmer</h3>
+            <div className="flex items-center gap-4 bg-grass-50 rounded-2xl p-4 border border-grass-100">
+              <div className="w-14 h-14 bg-grass-700 rounded-full flex items-center justify-center text-2xl shrink-0">
+                👨‍🌾
               </div>
               <div>
-                <p className="font-semibold">{product.farmer?.farmName || 'Local Farm'}</p>
-                <p className="text-gray-600">Verified Farmer</p>
-                <div className="flex items-center mt-1">
-                  <span className="text-yellow-400">★</span>
-                  <span className="ml-1 text-sm">4.5 rating</span>
+                <p className="font-bold text-grass-900">{product.farmer?.farmName || 'Local Farm'}</p>
+                <p className="text-grass-600 text-sm">✅ Verified Farmer</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-yellow-400 text-sm">★★★★★</span>
+                  <span className="text-xs text-grass-500">4.5 rating</span>
                 </div>
               </div>
             </div>

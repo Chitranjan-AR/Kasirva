@@ -28,12 +28,13 @@ const FarmerProfile = () => {
   });
 
   useEffect(() => {
+    if (!user) return;
     fetchProfile();
-  }, []);
+  }, [user]);
 
   const fetchProfile = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/farmers/profile`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/farmers/profile`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -53,7 +54,7 @@ const FarmerProfile = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/farmers/profile`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/farmers/profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

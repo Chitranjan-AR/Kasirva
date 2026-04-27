@@ -16,46 +16,57 @@ const AdminDashboard = () => {
     name: '',
     description: '',
     category: 'dairy',
-    price: { amount: '', unit: 'liter' },
-    stock: { quantity: '', unit: 'liters' },
+    price: { amount: '', unit: 'litre' },
+    stock: { quantity: '', unit: 'litre' },
     farmingMethod: 'organic'
   });
 
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [dashRes, prodRes] = await Promise.all([
+          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/dashboard`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          }),
+          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products`)
+        ]);
+        if (dashRes.ok) {
+          const data = await dashRes.json();
+          setStats(data.stats || {});
+          setFarmers(data.farmers || []);
+          setUsers(data.users || []);
+          setOrders(data.orders || []);
+        }
+        if (prodRes.ok) {
+          const productsData = await prodRes.json();
+          setProducts(productsData.products || []);
+        }
+      } catch (error) {
+        toast.error('Failed to fetch dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
+  const refetch = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/dashboard`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data.stats || {});
-        setFarmers(data.farmers || []);
-        setUsers(data.users || []);
-        setOrders(data.orders || []);
-      }
-      
-      // Fetch products
-      const productsRes = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products`);
-      if (productsRes.ok) {
-        const productsData = await productsRes.json();
-        setProducts(productsData.products || []);
-      }
-    } catch (error) {
-      toast.error('Failed to fetch dashboard data');
-    } finally {
-      setLoading(false);
-    }
+      const [dashRes, prodRes] = await Promise.all([
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/dashboard`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        }),
+        fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products`)
+      ]);
+      if (dashRes.ok) { const d = await dashRes.json(); setStats(d.stats||{}); setFarmers(d.farmers||[]); setUsers(d.users||[]); setOrders(d.orders||[]); }
+      if (prodRes.ok) { const d = await prodRes.json(); setProducts(d.products||[]); }
+    } catch {}
   };
 
   const handleFarmerAction = async (farmerId, action, reason = '') => {
     try {
       const endpoint = action === 'approve' ? 'approve' : 'reject';
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/farmers/${farmerId}/${endpoint}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/farmers/${farmerId}/${endpoint}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +77,7 @@ const AdminDashboard = () => {
 
       if (response.ok) {
         toast.success(`Farmer ${action}d successfully`);
-        fetchDashboardData();
+        refetch();
       } else {
         toast.error(`Failed to ${action} farmer`);
       }
@@ -77,14 +88,14 @@ const AdminDashboard = () => {
 
   const toggleUserStatus = async (userId) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/users/${userId}/toggle-status`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/users/${userId}/toggle-status`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
 
       if (response.ok) {
         toast.success('User status updated');
-        fetchDashboardData();
+        refetch();
       }
     } catch (error) {
       toast.error('Failed to update user status');
@@ -94,37 +105,65 @@ const AdminDashboard = () => {
   const handleAddProduct = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products`, {
+      // Get first farmer for the product
+      const farmersRes = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/farmers`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (!farmersRes.ok || !farmersRes) {
+        toast.error('No farmers available. Please add a farmer first.');
+        return;
+      }
+      
+      const farmersData = await farmersRes.json();
+      if (!farmersData.farmers || farmersData.farmers.length === 0) {
+        toast.error('No farmers available. Please add a farmer first.');
+        return;
+      }
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/products`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          ...newProduct,
-          images: [{ url: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&h=400&fit=crop' }],
-          farmingDetails: { method: newProduct.farmingMethod, isOrganic: newProduct.farmingMethod === 'organic' },
+          farmer: farmersData.farmers[0]._id,
+          name: newProduct.name,
+          description: newProduct.description,
+          category: newProduct.category,
+          subcategory: newProduct.category,
+          price: { 
+            amount: parseFloat(newProduct.price.amount), 
+            unit: newProduct.price.unit 
+          },
+          stock: { 
+            quantity: parseFloat(newProduct.stock.quantity), 
+            unit: newProduct.stock.unit 
+          },
+          farmingDetails: { 
+            method: newProduct.farmingMethod, 
+            isOrganic: newProduct.farmingMethod === 'organic' 
+          },
+          images: [{ url: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500' }],
           freshness: { harvestDate: new Date(), freshnessScore: 95 },
-          rating: { average: 4.5, count: 0 }
+          availability: { isAvailable: true },
+          rating: { average: 4.5, count: 0 },
+          isActive: true
         })
       });
 
       if (response.ok) {
         toast.success('Product added successfully');
         setShowAddProduct(false);
-        setNewProduct({
-          name: '',
-          description: '',
-          category: 'dairy',
-          price: { amount: '', unit: 'liter' },
-          stock: { quantity: '', unit: 'liters' },
-          farmingMethod: 'organic'
-        });
-        fetchDashboardData();
+        setNewProduct({ name: '', description: '', category: 'dairy', price: { amount: '', unit: 'litre' }, stock: { quantity: '', unit: 'litre' }, farmingMethod: 'organic' });
+        refetch();
       } else {
-        toast.error('Failed to add product');
+        const errorData = await response.json();
+        toast.error(errorData.message || 'Failed to add product');
       }
     } catch (error) {
+      console.error('Add product error:', error);
       toast.error('Failed to add product');
     }
   };
@@ -133,18 +172,20 @@ const AdminDashboard = () => {
     if (!window.confirm('Are you sure you want to delete this product?')) return;
     
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products/${productId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/admin/products/${productId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
 
       if (response.ok) {
         toast.success('Product deleted successfully');
-        fetchDashboardData();
+        refetch();
       } else {
-        toast.error('Failed to delete product');
+        const errorData = await response.json();
+        toast.error(errorData.message || 'Failed to delete product');
       }
     } catch (error) {
+      console.error('Delete error:', error);
       toast.error('Failed to delete product');
     }
   };
@@ -250,7 +291,7 @@ const AdminDashboard = () => {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-blue-600">Today's Orders</span>
-                        <span className="font-semibold text-green-600">{Math.floor(Math.random() * 15) + 5}</span>
+                        <span className="font-semibold text-green-600">{orders.filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString()).length}</span>
                       </div>
                     </div>
                   </div>
@@ -322,6 +363,7 @@ const AdminDashboard = () => {
                             value={newProduct.name}
                             onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
                             className="w-full p-2 border rounded"
+                            placeholder="e.g., Fresh Milk"
                           />
                         </div>
                         <div>
@@ -332,6 +374,7 @@ const AdminDashboard = () => {
                             onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
                             className="w-full p-2 border rounded"
                             rows="3"
+                            placeholder="Product description..."
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -340,21 +383,68 @@ const AdminDashboard = () => {
                             <input
                               type="number"
                               required
+                              min="0"
+                              step="0.01"
                               value={newProduct.price.amount}
                               onChange={(e) => setNewProduct({...newProduct, price: {...newProduct.price, amount: e.target.value}})}
                               className="w-full p-2 border rounded"
+                              placeholder="60"
                             />
                           </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Price Unit</label>
+                            <select
+                              value={newProduct.price.unit}
+                              onChange={(e) => setNewProduct({...newProduct, price: {...newProduct.price, unit: e.target.value}})}
+                              className="w-full p-2 border rounded"
+                            >
+                              <option value="kg">kg</option>
+                              <option value="litre">litre</option>
+                              <option value="piece">piece</option>
+                              <option value="dozen">dozen</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium mb-1">Stock Quantity</label>
                             <input
                               type="number"
                               required
+                              min="0"
                               value={newProduct.stock.quantity}
                               onChange={(e) => setNewProduct({...newProduct, stock: {...newProduct.stock, quantity: e.target.value}})}
                               className="w-full p-2 border rounded"
+                              placeholder="100"
                             />
                           </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Stock Unit</label>
+                            <select
+                              value={newProduct.stock.unit}
+                              onChange={(e) => setNewProduct({...newProduct, stock: {...newProduct.stock, unit: e.target.value}})}
+                              className="w-full p-2 border rounded"
+                            >
+                              <option value="kg">kg</option>
+                              <option value="litre">litre</option>
+                              <option value="piece">piece</option>
+                              <option value="dozen">dozen</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Category</label>
+                          <select
+                            value={newProduct.category}
+                            onChange={(e) => setNewProduct({...newProduct, category: e.target.value})}
+                            className="w-full p-2 border rounded"
+                          >
+                            <option value="dairy">Dairy</option>
+                            <option value="vegetables">Vegetables</option>
+                            <option value="fruits">Fruits</option>
+                            <option value="grains">Grains</option>
+                            <option value="organic">Organic</option>
+                          </select>
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">Farming Method</label>
@@ -365,6 +455,7 @@ const AdminDashboard = () => {
                           >
                             <option value="organic">Organic</option>
                             <option value="natural">Natural</option>
+                            <option value="chemical">Chemical</option>
                           </select>
                         </div>
                         <div className="flex space-x-3">

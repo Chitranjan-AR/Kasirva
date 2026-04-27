@@ -110,7 +110,7 @@ const seedDatabase = async () => {
     // Create sample users
     const adminUser = await User.create({
       name: 'Admin User',
-      email: 'admin@kashirva.com',
+      email: 'admin@kshirva.com',
       password: 'admin123',
       phone: '+919876543210',
       role: 'admin',
@@ -120,7 +120,7 @@ const seedDatabase = async () => {
 
     const farmerUser = await User.create({
       name: 'Ramesh Kumar',
-      email: 'farmer@kashirva.com',
+      email: 'farmer@kshirva.com',
       password: 'farmer123',
       phone: '+919876543211',
       role: 'farmer',
@@ -130,7 +130,7 @@ const seedDatabase = async () => {
 
     const consumerUser = await User.create({
       name: 'Priya Sharma',
-      email: 'consumer@kashirva.com',
+      email: 'consumer@kshirva.com',
       password: 'consumer123',
       phone: '+919876543212',
       role: 'consumer',
@@ -218,9 +218,9 @@ const seedDatabase = async () => {
 
     console.log('🎉 Database seeding completed successfully!');
     console.log('\n📋 Sample Credentials:');
-    console.log('Admin: admin@kashirva.com / admin123');
-    console.log('Farmer: farmer@kashirva.com / farmer123');
-    console.log('Consumer: consumer@kashirva.com / consumer123');
+    console.log('Admin: admin@kshirva.com / admin123');
+    console.log('Farmer: farmer@kshirva.com / farmer123');
+    console.log('Consumer: consumer@kshirva.com / consumer123');
 
   } catch (error) {
     console.error('❌ Error seeding database:', error);

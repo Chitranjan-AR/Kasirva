@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
 const InventoryManagement = () => {
@@ -7,13 +7,9 @@ const InventoryManagement = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [stockUpdate, setStockUpdate] = useState({ quantity: '', reason: '' });
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/farmer/products`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/farmer/products`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
@@ -25,11 +21,13 @@ const InventoryManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   const updateStock = async (productId, newQuantity, reason) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/farmer/products/${productId}/stock`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/farmer/products/${productId}/stock`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

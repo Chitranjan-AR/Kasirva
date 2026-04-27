@@ -5,7 +5,7 @@ const router = express.Router();
 // Test route to check admin user
 router.get('/', async (req, res) => {
   try {
-    const admin = await User.findOne({ email: 'admin@kashirva.com' });
+    const admin = await User.findOne({ email: 'admin@kshirva.com' });
     if (admin) {
       res.json({
         message: 'Admin user found',

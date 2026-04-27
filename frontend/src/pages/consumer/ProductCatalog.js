@@ -1,250 +1,366 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import toast from 'react-hot-toast';
 
+/* ── Reliable dairy image map by subcategory ── */
+const FALLBACK_IMAGES = {
+  'fresh-milk':    'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&h=300&fit=crop&auto=format',
+  'flavored-milk': 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=400&h=300&fit=crop&auto=format',
+  'butter-cream':  'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=400&h=300&fit=crop&auto=format',
+  'paneer-cheese': 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=400&h=300&fit=crop&auto=format',
+  'ghee':          'https://images.unsplash.com/photo-1481391243133-f96216dcb5d2?w=400&h=300&fit=crop&auto=format',
+  'curd-dahi':     'https://images.unsplash.com/photo-1571212515416-fef01fc43637?w=400&h=300&fit=crop&auto=format',
+  'drinks':        'https://images.unsplash.com/photo-1623065422902-30a2d299bbe4?w=400&h=300&fit=crop&auto=format',
+  'default':       'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&h=300&fit=crop&auto=format',
+};
+
+const getImage = (product) => {
+  const url = product.images?.[0]?.url;
+  if (url && url.startsWith('http')) return url;
+  return FALLBACK_IMAGES[product.subcategory] || FALLBACK_IMAGES.default;
+};
+
+const CATEGORIES = [
+  { value: '',              label: 'All Products',    emoji: '🥛' },
+  { value: 'fresh-milk',   label: 'Fresh Milk',      emoji: '🐄' },
+  { value: 'ghee',         label: 'Desi Ghee',       emoji: '🧈' },
+  { value: 'paneer-cheese',label: 'Paneer & Cheese', emoji: '🧀' },
+  { value: 'curd-dahi',    label: 'Curd & Dahi',     emoji: '🫙' },
+  { value: 'butter-cream', label: 'Butter & Cream',  emoji: '🍦' },
+  { value: 'drinks',       label: 'Lassi & Drinks',  emoji: '🥤' },
+  { value: 'flavored-milk',label: 'Flavored Milk',   emoji: '🍫' },
+];
+
 const ProductCatalog = () => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
+  const location = useLocation();
+  const [products, setProducts]   = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [imgErrors, setImgErrors] = useState({});
+  const [filters, setFilters]     = useState({
     category: '',
-    search: '',
+    search: new URLSearchParams(location.search).get('search') || '',
     minPrice: '',
     maxPrice: '',
-    farmingMethod: '',
-    location: '',
     sortBy: 'newest',
-    inStock: false
+    inStock: false,
   });
-  const { addToCart } = useCart();
+
+  const { addToCart, cartItems, getCartTotal } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const queryParams = new URLSearchParams();
+        const q = new URLSearchParams();
+        q.append('category', 'dairy');
+        if (filters.category) q.append('subcategory', filters.category);
+        if (filters.search)   q.append('search', filters.search);
+        if (filters.minPrice) q.append('minPrice', filters.minPrice);
+        if (filters.maxPrice) q.append('maxPrice', filters.maxPrice);
+        if (filters.sortBy)   q.append('sortBy', filters.sortBy);
+        if (filters.inStock)  q.append('inStock', 'true');
+
+        const res  = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products?${q}`);
         
-        if (filters.category) queryParams.append('category', filters.category);
-        if (filters.search) queryParams.append('search', filters.search);
-        if (filters.minPrice) queryParams.append('minPrice', filters.minPrice);
-        if (filters.maxPrice) queryParams.append('maxPrice', filters.maxPrice);
-        if (filters.location) queryParams.append('location', filters.location);
-        if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
-        if (filters.inStock) queryParams.append('inStock', 'true');
+        if (!res.ok) {
+          throw new Error(`API error: ${res.status} ${res.statusText}`);
+        }
         
-        const url = `/products?${queryParams.toString()}`;
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}${url}`);
-        const data = await response.json();
-        
-        console.log('API Response:', data);
-        setProducts(data.products || []);
+        const data = await res.json();
+        let list = data.products || [];
+
+        // client-side subcategory filter
+        if (filters.category) list = list.filter(p => p.subcategory === filters.category);
+        setProducts(list);
       } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Product fetch error:', error);
         toast.error('Failed to fetch products');
       } finally {
         setLoading(false);
       }
     };
-    
     fetchProducts();
-  }, [filters.category, filters.search, filters.minPrice, filters.maxPrice, filters.farmingMethod, filters.location, filters.sortBy, filters.inStock]);
+  }, [filters.category, filters.search, filters.minPrice, filters.maxPrice, filters.sortBy, filters.inStock]);
 
-  const handleAddToCart = (product) => {
-    addToCart(product, 1);
-    toast.success(`${product.name} added to cart`);
+  const handleImgError = (id, subcategory) => {
+    setImgErrors(prev => ({ ...prev, [id]: FALLBACK_IMAGES[subcategory] || FALLBACK_IMAGES.default }));
   };
 
-  const categories = ['dairy'];
-  const farmingMethods = ['organic', 'natural'];
+  const toggleWishlist = (product) => {
+    if (isInWishlist(product._id)) {
+      removeFromWishlist(product._id);
+      toast.success('Removed from wishlist');
+    } else {
+      addToWishlist(product);
+      toast.success('Added to wishlist ❤️');
+    }
+  };
+
+  const clearFilters = () => setFilters({ category: '', search: '', minPrice: '', maxPrice: '', sortBy: 'newest', inStock: false });
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Fresh Milk Products</h1>
-        
-        {/* Enhanced Filters */}
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <input
-              type="text"
-              placeholder="Search milk products..."
-              value={filters.search}
-              onChange={(e) => setFilters({...filters, search: e.target.value})}
-              className="input-field"
-            />
-            
-            <select
-              value={filters.category}
-              onChange={(e) => setFilters({...filters, category: e.target.value})}
-              className="input-field"
+    <div className="min-h-screen bg-grass-50">
+
+      {/* ── Header Banner ── */}
+      <div className="bg-gradient-to-r from-grass-800 to-grass-600 text-white py-8 px-4">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-2xl md:text-3xl font-extrabold mb-1">🥛 Fresh Dairy Products</h1>
+          <p className="text-grass-200 text-sm">Farm-fresh, pure & delivered daily to your door</p>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        {/* ── Category Pills ── */}
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-5 scrollbar-hide">
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat.value}
+              onClick={() => setFilters(f => ({ ...f, category: cat.value }))}
+              className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all ${
+                filters.category === cat.value
+                  ? 'bg-grass-700 text-white border-grass-700 shadow-md'
+                  : 'bg-white text-grass-700 border-grass-200 hover:border-grass-400'
+              }`}
             >
-              <option value="">All Dairy Products</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-              ))}
-            </select>
-            
+              <span>{cat.emoji}</span> {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Filters Bar ── */}
+        <div className="bg-white rounded-2xl border border-grass-100 shadow-sm p-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <input
               type="text"
-              placeholder="Location (city/state)"
-              value={filters.location}
-              onChange={(e) => setFilters({...filters, location: e.target.value})}
+              placeholder="🔍 Search products..."
+              value={filters.search}
+              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+              className="input-field col-span-1 lg:col-span-2"
+            />
+            <input
+              type="number"
+              placeholder="Min ₹"
+              value={filters.minPrice}
+              onChange={e => setFilters(f => ({ ...f, minPrice: e.target.value }))}
               className="input-field"
             />
-            
+            <input
+              type="number"
+              placeholder="Max ₹"
+              value={filters.maxPrice}
+              onChange={e => setFilters(f => ({ ...f, maxPrice: e.target.value }))}
+              className="input-field"
+            />
             <select
               value={filters.sortBy}
-              onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
+              onChange={e => setFilters(f => ({ ...f, sortBy: e.target.value }))}
               className="input-field"
             >
               <option value="newest">Newest First</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
+              <option value="price-low">Price: Low → High</option>
+              <option value="price-high">Price: High → Low</option>
               <option value="rating">Highest Rated</option>
               <option value="popular">Most Popular</option>
             </select>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <select
-              value={filters.farmingMethod}
-              onChange={(e) => setFilters({...filters, farmingMethod: e.target.value})}
-              className="input-field"
-            >
-              <option value="">All Methods</option>
-              {farmingMethods.map(method => (
-                <option key={method} value={method}>{method.charAt(0).toUpperCase() + method.slice(1)}</option>
-              ))}
-            </select>
-            
-            <input
-              type="number"
-              placeholder="Min Price (₹)"
-              value={filters.minPrice}
-              onChange={(e) => setFilters({...filters, minPrice: e.target.value})}
-              className="input-field"
-            />
-            
-            <input
-              type="number"
-              placeholder="Max Price (₹)"
-              value={filters.maxPrice}
-              onChange={(e) => setFilters({...filters, maxPrice: e.target.value})}
-              className="input-field"
-            />
-            
-            <label className="flex items-center space-x-2">
+          <div className="flex items-center justify-between mt-3">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={filters.inStock}
-                onChange={(e) => setFilters({...filters, inStock: e.target.checked})}
-                className="rounded"
+                onChange={e => setFilters(f => ({ ...f, inStock: e.target.checked }))}
+                className="w-4 h-4 accent-grass-600 rounded"
               />
-              <span className="text-sm">In Stock Only</span>
+              <span className="text-sm text-grass-700 font-medium">In Stock Only</span>
             </label>
-          </div>
-          
-          <div className="mt-4 flex justify-between items-center">
-            <span className="text-sm text-gray-600">
-              {products.length} products found
-            </span>
-            <button
-              onClick={() => setFilters({
-                category: '', search: '', minPrice: '', maxPrice: '', 
-                farmingMethod: '', location: '', sortBy: 'newest', inStock: false
-              })}
-              className="text-sm text-green-600 hover:text-green-800"
-            >
-              Clear All Filters
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-grass-600 font-medium">{products.length} products</span>
+              <button onClick={clearFilters} className="text-xs text-grass-600 hover:text-grass-800 underline">
+                Clear filters
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Products Grid */}
+        {/* ── Products Grid ── */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <div className="w-12 h-12 border-4 border-grass-200 border-t-grass-600 rounded-full animate-spin" />
+            <p className="text-grass-600 text-sm font-medium">Loading fresh products...</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">🥛</div>
+            <p className="text-grass-700 font-semibold text-lg mb-1">No products found</p>
+            <p className="text-grass-500 text-sm mb-4">Try adjusting your filters</p>
+            <button onClick={clearFilters} className="btn-primary text-sm">Clear Filters</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map(product => (
-              <div key={product._id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                <img
-                  src={product.images?.[0]?.url || '/placeholder-product.jpg'}
-                  alt={product.name}
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    e.target.src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&h=200&fit=crop';
-                  }}
-                />
-                
-                <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-2">{product.name}</h3>
-                  <p className="text-gray-600 text-sm mb-2 line-clamp-2">{product.description}</p>
-                  
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-2xl font-bold text-green-600">
-                      ₹{product.price.amount}/{product.price.unit}
-                    </span>
-                    {product.farmingDetails.isOrganic && (
-                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                        Organic
-                      </span>
-                    )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {products.map(product => {
+              const imgSrc = imgErrors[product._id] || getImage(product);
+              const inWish = isInWishlist(product._id);
+              const outOfStock = product.stock?.quantity === 0;
+
+              return (
+                <div
+                  key={product._id}
+                  className="bg-white rounded-2xl border border-grass-100 overflow-hidden hover:shadow-lg hover:border-grass-300 transition-all group flex flex-col"
+                >
+                  {/* Image */}
+                  <div className="relative overflow-hidden bg-grass-50 h-44">
+                    <img
+                      src={imgSrc}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={() => handleImgError(product._id, product.subcategory)}
+                      loading="lazy"
+                    />
+                    {/* Badges */}
+                    <div className="absolute top-2 left-2 flex flex-col gap-1">
+                      {product.farmingDetails?.isOrganic && (
+                        <span className="bg-grass-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow">
+                          🌿 Organic
+                        </span>
+                      )}
+                      {outOfStock && (
+                        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                          Out of Stock
+                        </span>
+                      )}
+                    </div>
+                    {/* Wishlist btn */}
+                    <button
+                      onClick={() => toggleWishlist(product)}
+                      className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center shadow transition-all ${
+                        inWish ? 'bg-red-500 text-white' : 'bg-white text-grass-400 hover:text-red-500'
+                      }`}
+                    >
+                      {inWish ? '❤️' : '🤍'}
+                    </button>
                   </div>
-                  
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-gray-500">
-                      Stock: {product.stock.quantity} {product.stock.unit}
-                    </span>
-                    <div className="flex items-center">
-                      <span className="text-yellow-400">★</span>
-                      <span className="text-sm ml-1">{product.rating.average.toFixed(1)}</span>
+
+                  {/* Info */}
+                  <div className="p-3 flex flex-col flex-1">
+                    <p className="text-xs text-grass-500 font-medium mb-0.5">
+                      {CATEGORIES.find(c => c.value === product.subcategory)?.emoji || '🥛'}{' '}
+                      {CATEGORIES.find(c => c.value === product.subcategory)?.label || 'Dairy'}
+                    </p>
+                    <h3 className="text-sm font-bold text-grass-900 leading-snug mb-1 line-clamp-2">
+                      {product.name}
+                    </h3>
+
+                    {/* Rating */}
+                    <div className="flex items-center gap-1 mb-2">
+                      <span className="text-yellow-400 text-xs">{'★'.repeat(Math.round(product.rating?.average || 4))}</span>
+                      <span className="text-xs text-grass-500">({product.rating?.count || 0})</span>
+                    </div>
+
+                    {/* Price */}
+                    <div className="flex items-baseline gap-1 mb-3 mt-auto">
+                      <span className="text-lg font-extrabold text-grass-700">
+                        ₹{product.price?.amount}
+                      </span>
+                      <span className="text-xs text-grass-500">/{product.price?.unit}</span>
+                    </div>
+
+                    {/* Stock bar */}
+                    {!outOfStock && product.stock?.quantity <= 20 && (
+                      <div className="mb-2">
+                        <p className="text-xs text-orange-500 font-medium mb-1">
+                          Only {product.stock.quantity} left!
+                        </p>
+                        <div className="w-full bg-grass-100 rounded-full h-1">
+                          <div
+                            className="bg-orange-400 h-1 rounded-full"
+                            style={{ width: `${Math.min((product.stock.quantity / 20) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/products/${product._id}`}
+                        className="flex-1 text-center py-2 rounded-xl border border-grass-200 text-grass-700 text-xs font-semibold hover:bg-grass-50 transition-all"
+                      >
+                        👁️ View Details
+                      </Link>
+                      <button
+                        onClick={() => { addToCart(product, 1); toast.success(`${product.name} added to cart! 🛒`); }}
+                        disabled={outOfStock}
+                        className="flex-1 py-2 rounded-xl bg-grass-700 text-white text-xs font-bold hover:bg-grass-800 transition-all disabled:bg-grass-200 disabled:text-grass-400 disabled:cursor-not-allowed"
+                      >
+                        {outOfStock ? 'Out of Stock' : '+ Add to Cart'}
+                      </button>
                     </div>
                   </div>
-                  
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        if (isInWishlist(product._id)) {
-                          removeFromWishlist(product._id);
-                          toast.success('Removed from wishlist');
-                        } else {
-                          addToWishlist(product);
-                          toast.success('Added to wishlist');
-                        }
-                      }}
-                      className={`p-2 rounded ${isInWishlist(product._id) ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'} hover:bg-opacity-80`}
-                    >
-                      {isInWishlist(product._id) ? '❤️' : '🤍'}
-                    </button>
-                    <Link
-                      to={`/products/${product._id}`}
-                      className="flex-1 bg-gray-100 text-gray-800 py-2 px-4 rounded text-center text-sm hover:bg-gray-200 transition-colors"
-                    >
-                      View Details
-                    </Link>
-                    <button
-                      onClick={() => handleAddToCart(product)}
-                      className="flex-1 bg-green-600 text-white py-2 px-4 rounded text-sm hover:bg-green-700 transition-colors"
-                    >
-                      Add to Cart
-                    </button>
-                  </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Floating Cart Summary */}
+        {cartItems.length > 0 && (
+          <div className="fixed bottom-6 right-6 bg-grass-700 text-white p-4 rounded-2xl shadow-2xl z-50 max-w-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold">Cart Summary</span>
+              <span className="bg-grass-600 text-xs px-2 py-1 rounded-full">{cartItems.length} items</span>
+            </div>
+            <div className="text-sm mb-3">
+              Total: <span className="font-bold text-lg">₹{getCartTotal().toFixed(2)}</span>
+            </div>
+            <div className="flex gap-2">
+              <Link
+                to="/cart"
+                className="flex-1 bg-white text-grass-700 py-2 px-4 rounded-lg text-center font-semibold hover:bg-gray-100 transition-colors"
+              >
+                View Cart
+              </Link>
+              <Link
+                to="/checkout"
+                className="flex-1 bg-grass-600 text-white py-2 px-4 rounded-lg text-center font-semibold hover:bg-grass-500 transition-colors"
+              >
+                Checkout
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Add Modal or Toast Enhancement */}
+        {/* Add some helpful tips */}
+        <div className="mt-8 bg-grass-50 border border-grass-200 rounded-2xl p-6">
+          <h3 className="text-lg font-semibold text-grass-900 mb-4">🛒 How to Order</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="flex items-start gap-3">
+              <span className="bg-grass-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+              <div>
+                <p className="font-semibold text-grass-900">Browse Products</p>
+                <p className="text-grass-700">Find fresh dairy products from verified farmers</p>
               </div>
-            ))}
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-grass-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+              <div>
+                <p className="font-semibold text-grass-900">Add to Cart</p>
+                <p className="text-grass-700">Click "Add to Cart" or adjust quantities as needed</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-grass-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+              <div>
+                <p className="font-semibold text-grass-900">Checkout & Pay</p>
+                <p className="text-grass-700">Choose delivery slot and payment method</p>
+              </div>
+            </div>
           </div>
-        )}
-        
-        {!loading && products.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No milk products found. Please run the database seeder first.</p>
-            <p className="text-sm text-gray-400 mt-2">Backend: npm run seed</p>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

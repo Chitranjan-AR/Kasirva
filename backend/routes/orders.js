@@ -25,22 +25,22 @@ router.post('/', auth, authorize('consumer'), [
 
     const { items, delivery, payment } = req.body;
 
-    // Validate products and calculate total
     let subtotal = 0;
     const orderItems = [];
+    let farmerId = null;
 
     for (const item of items) {
       const product = await Product.findById(item.productId);
-      if (!product) {
-        return res.status(404).json({ message: `Product ${item.productId} not found` });
-      }
+      if (!product)
+        return res.status(404).json({ message: `Product not found` });
 
-      if (product.stock.quantity < item.quantity) {
-        return res.status(400).json({ 
-          message: `Insufficient stock for ${product.name}. Available: ${product.stock.quantity}` 
-        });
-      }
+      if (product.stock.quantity < item.quantity)
+        return res.status(400).json({ message: `Insufficient stock for ${product.name}. Available: ${product.stock.quantity}` });
 
+      if (farmerId && product.farmer.toString() !== farmerId)
+        return res.status(400).json({ message: 'All items must be from the same farmer' });
+
+      farmerId = product.farmer.toString();
       const itemTotal = product.price.amount * item.quantity;
       subtotal += itemTotal;
 
@@ -51,56 +51,45 @@ router.post('/', auth, authorize('consumer'), [
         price: product.price.amount,
         totalPrice: itemTotal
       });
-
-      // Update product stock
-      product.stock.quantity -= item.quantity;
-      await product.save();
     }
 
-    // Get farmer from first product
-    const firstProduct = await Product.findById(items[0].productId).populate('farmer');
-    const farmer = firstProduct.farmer;
+    const farmer = await Farmer.findById(farmerId);
+    if (!farmer)
+      return res.status(404).json({ message: 'Farmer not found' });
 
-    // Calculate delivery fee (simple calculation)
-    const deliveryFee = delivery.distance ? Math.ceil(delivery.distance) * 10 : 50;
-    const tax = subtotal * 0.05; // 5% tax
-    const total = subtotal + deliveryFee + tax;
+    const deliveryFee = subtotal >= 500 ? 0 : 50;
+    const tax = parseFloat((subtotal * 0.05).toFixed(2));
+    const total = parseFloat((subtotal + deliveryFee + tax).toFixed(2));
 
     const order = new Order({
       consumer: req.user.id,
       farmer: farmer._id,
       items: orderItems,
-      pricing: {
-        subtotal,
-        deliveryFee,
-        tax,
-        total
-      },
+      pricing: { subtotal, deliveryFee, tax, total },
       delivery,
       payment
     });
 
     await order.save();
+
+    // Deduct stock after order saved
+    for (const item of items) {
+      await Product.findByIdAndUpdate(item.productId, { $inc: { 'stock.quantity': -item.quantity } });
+    }
+
     await order.populate(['consumer', 'farmer', 'items.product']);
 
-    // Send notification
-    await sendOrderNotification(order, 'order_placed');
+    // Notifications (non-blocking)
+    try { await sendOrderNotification(order, 'order_placed'); } catch (e) { console.error('Notification error:', e); }
+    try {
+      const io = req.app.get('io');
+      if (io && farmer.user) io.to(farmer.user.toString()).emit('new_order', { orderId: order._id, orderNumber: order.orderNumber, total });
+    } catch (e) { console.error('Socket error:', e); }
 
-    // Emit real-time notification to farmer
-    const io = req.app.get('io');
-    io.to(farmer.user.toString()).emit('new_order', {
-      orderId: order._id,
-      orderNumber: order.orderNumber,
-      total: order.pricing.total
-    });
-
-    res.status(201).json({
-      message: 'Order placed successfully',
-      order
-    });
+    res.status(201).json({ message: 'Order placed successfully', order });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Order creation error:', error.message);
+    res.status(500).json({ message: error.message || 'Failed to create order. Please try again.' });
   }
 });
 
@@ -184,9 +173,35 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
+// @route   PUT /api/orders/:id/cancel
+// @desc    Cancel order by consumer
+// @access  Private (Consumer only)
+router.put('/:id/cancel', auth, authorize('consumer'), async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.consumer.toString() !== req.user.id)
+      return res.status(403).json({ message: 'Access denied' });
+    if (!['pending', 'accepted'].includes(order.status?.current))
+      return res.status(400).json({ message: 'Order cannot be cancelled at this stage' });
+
+    order.updateStatus('cancelled', req.body.reason || 'Cancelled by customer');
+    order.cancellation = { reason: req.body.reason || 'Cancelled by customer', cancelledBy: req.user.id, cancelledAt: new Date() };
+
+    // Restore stock
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.product, { $inc: { 'stock.quantity': item.quantity } });
+    }
+    await order.save();
+    res.json({ message: 'Order cancelled successfully', order });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   PUT /api/orders/:id/status
-// @desc    Update order status
-// @access  Private (Farmer only)
+// @desc    Update order status (Farmer)
 router.put('/:id/status', auth, authorize('farmer'), [
   body('status').isIn(['accepted', 'rejected', 'preparing', 'ready', 'out_for_delivery', 'delivered']).withMessage('Invalid status'),
 ], async (req, res) => {
@@ -212,28 +227,45 @@ router.put('/:id/status', auth, authorize('farmer'), [
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    order.updateStatus(status, note);
+    if (typeof order.updateStatus === 'function') {
+      order.updateStatus(status, note);
+    } else {
+      order.status = {
+        current: status,
+        history: [
+          ...(order.status?.history || []),
+          { status, timestamp: new Date(), note }
+        ]
+      };
+    }
     await order.save();
 
     // Send notification to consumer
-    await order.populate('consumer');
-    await sendOrderNotification(order, `order_${status}`);
+    try {
+      await order.populate('consumer');
+      await sendOrderNotification(order, `order_${status}`);
 
-    // Emit real-time notification
-    const io = req.app.get('io');
-    io.to(order.consumer._id.toString()).emit('order_update', {
-      orderId: order._id,
-      status: status,
-      message: `Your order is now ${status}`
-    });
+      // Emit real-time notification
+      const io = req.app.get('io');
+      if (io && order.consumer && order.consumer._id) {
+        io.to(order.consumer._id.toString()).emit('order_update', {
+          orderId: order._id,
+          status: status,
+          message: `Your order is now ${status}`
+        });
+      }
+    } catch (notificationError) {
+      console.error('Status update notification error:', notificationError);
+      // Don't fail the request if notification fails
+    }
 
     res.json({
       message: 'Order status updated successfully',
       order
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Order status update error:', error);
+    res.status(500).json({ message: 'Failed to update order status. Please try again.' });
   }
 });
 
@@ -261,11 +293,11 @@ router.post('/:id/review', auth, authorize('consumer'), [
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    if (order.status.current !== 'delivered') {
+    if (order.status?.current !== 'delivered') {
       return res.status(400).json({ message: 'Can only review delivered orders' });
     }
 
-    if (order.review.rating) {
+    if (order.review?.rating) {
       return res.status(400).json({ message: 'Order already reviewed' });
     }
 
@@ -278,19 +310,26 @@ router.post('/:id/review', auth, authorize('consumer'), [
     await order.save();
 
     // Update farmer rating
-    const farmer = await Farmer.findById(order.farmer);
-    const totalRating = farmer.rating.average * farmer.rating.count + rating;
-    farmer.rating.count += 1;
-    farmer.rating.average = totalRating / farmer.rating.count;
-    await farmer.save();
+    try {
+      const farmer = await Farmer.findById(order.farmer);
+      if (farmer && farmer.rating) {
+        const totalRating = (farmer.rating.average || 0) * (farmer.rating.count || 0) + rating;
+        farmer.rating.count = (farmer.rating.count || 0) + 1;
+        farmer.rating.average = totalRating / farmer.rating.count;
+        await farmer.save();
+      }
+    } catch (ratingError) {
+      console.error('Farmer rating update error:', ratingError);
+      // Don't fail the review if rating update fails
+    }
 
     res.json({
       message: 'Review added successfully',
-      review: order.review
+      order
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Review creation error:', error);
+    res.status(500).json({ message: 'Failed to add review. Please try again.' });
   }
 });
 

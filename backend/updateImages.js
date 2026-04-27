@@ -17,7 +17,7 @@ async function updateMilkImages() {
   const client = new MongoClient(uri);
   try {
     await client.connect();
-    const db = client.db('kashirva');
+    const db = client.db('kshirva');
     
     const products = await db.collection('products').find({}).toArray();
     

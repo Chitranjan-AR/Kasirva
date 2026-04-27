@@ -4,7 +4,7 @@ const orderSchema = new mongoose.Schema({
   orderNumber: {
     type: String,
     unique: true,
-    required: true
+    default: () => `KSH${Date.now()}${Math.floor(Math.random() * 9000) + 1000}`
   },
   consumer: {
     type: mongoose.Schema.Types.ObjectId,
@@ -145,15 +145,6 @@ const orderSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
-});
-
-// Generate order number
-orderSchema.pre('save', async function(next) {
-  if (!this.orderNumber) {
-    const count = await mongoose.model('Order').countDocuments();
-    this.orderNumber = `KSH${Date.now()}${String(count + 1).padStart(4, '0')}`;
-  }
-  next();
 });
 
 // Update status history

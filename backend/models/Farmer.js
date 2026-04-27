@@ -16,8 +16,15 @@ const farmerSchema = new mongoose.Schema({
       required: true
     },
     coordinates: {
-      lat: { type: Number, required: true },
-      lng: { type: Number, required: true }
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point'
+      },
+      coordinates: {
+        type: [Number], // [lng, lat]
+        required: true
+      }
     },
     pincode: {
       type: String,

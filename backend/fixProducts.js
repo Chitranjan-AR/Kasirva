@@ -6,7 +6,7 @@ async function fixProducts() {
   const client = new MongoClient(uri);
   try {
     await client.connect();
-    const db = client.db('kashirva');
+    const db = client.db('kshirva');
     
     // Get first farmer
     const farmer = await db.collection('farmers').findOne({});
@@ -18,7 +18,7 @@ async function fixProducts() {
       if (!user) {
         const newUser = await db.collection('users').insertOne({
           name: 'Milk Farmer',
-          email: 'milkfarmer@kashirva.com',
+          email: 'milkfarmer@kshirva.com',
           password: '$2a$10$example', // hashed password
           phone: '+919876543213',
           role: 'farmer',

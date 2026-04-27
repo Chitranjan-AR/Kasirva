@@ -327,4 +327,104 @@ router.get('/analytics', auth, authorize('admin'), async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/products
+// @desc    Get all products for admin
+// @access  Private (Admin only)
+router.get('/products', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search, isActive } = req.query;
+    
+    let query = {};
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (isActive !== undefined) {
+      query.isActive = isActive === 'true';
+    }
+
+    const products = await Product.find(query)
+      .populate('farmer', 'farmName')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Product.countDocuments(query);
+
+    res.json({
+      products,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / limit),
+        total
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST /api/admin/products
+// @desc    Create product as admin
+// @access  Private (Admin only)
+router.post('/products', auth, authorize('admin'), async (req, res) => {
+  try {
+    const product = new Product(req.body);
+    await product.save();
+    await product.populate('farmer', 'farmName');
+
+    res.status(201).json({
+      message: 'Product created successfully',
+      product
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/admin/products/:id/toggle-status
+// @desc    Toggle product active status
+// @access  Private (Admin only)
+router.put('/products/:id/toggle-status', auth, authorize('admin'), async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    product.isActive = !product.isActive;
+    await product.save();
+
+    res.json({ 
+      message: `Product ${product.isActive ? 'activated' : 'deactivated'} successfully`, 
+      product 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/admin/products/:id
+// @desc    Delete product
+// @access  Private (Admin only)
+router.delete('/products/:id', auth, authorize('admin'), async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    await product.deleteOne();
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

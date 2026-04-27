@@ -63,7 +63,7 @@ const Wishlist = () => {
                   </span>
                   <div className="flex items-center">
                     <span className="text-yellow-400">★</span>
-                    <span className="text-sm ml-1">{product.rating.average.toFixed(1)}</span>
+                    <span className="text-sm ml-1">{(product.rating?.average || 0).toFixed(1)}</span>
                   </div>
                 </div>
                 

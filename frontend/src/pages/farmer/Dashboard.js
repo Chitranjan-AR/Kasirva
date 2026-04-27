@@ -9,19 +9,18 @@ const FarmerDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const response = await farmerAPI.getDashboard();
+        setDashboardData(response.data);
+      } catch (error) {
+        toast.error('Failed to fetch dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchDashboardData();
   }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const response = await farmerAPI.getDashboard();
-      setDashboardData(response.data);
-    } catch (error) {
-      toast.error('Failed to fetch dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -143,7 +142,6 @@ const FarmerDashboard = () => {
           </div>
         </div>
 
-import InventoryManagement from '../../components/farmer/InventoryManagement';
         {/* Inventory Management Section */}
         <div className="mt-8">
           <InventoryManagement />

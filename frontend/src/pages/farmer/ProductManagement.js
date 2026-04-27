@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
 const ProductManagement = () => {
@@ -16,18 +15,11 @@ const ProductManagement = () => {
     farmingMethod: 'natural'
   });
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products/farmer/my-products`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products/farmer/my-products`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      
       if (response.ok) {
         const data = await response.json();
         setProducts(data.products || []);
@@ -37,12 +29,14 @@ const ProductManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
