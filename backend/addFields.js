@@ -6,7 +6,7 @@ async function addMissingFields() {
   const client = new MongoClient(uri);
   try {
     await client.connect();
-    const db = client.db('kashirva');
+    const db = client.db('kshirva');
     
     // Add missing fields to all products
     await db.collection('products').updateMany(

@@ -38,15 +38,23 @@ router.post('/profile', auth, authorize('farmer'), [
 
     let farmer = await Farmer.findOne({ user: req.user.id });
 
+    // Convert lat/lng to GeoJSON Point format
+    if (farmLocation?.coordinates?.lat && farmLocation?.coordinates?.lng) {
+      farmLocation.coordinates = {
+        type: 'Point',
+        coordinates: [parseFloat(farmLocation.coordinates.lng), parseFloat(farmLocation.coordinates.lat)]
+      };
+    }
+
     if (farmer) {
       // Update existing profile
-      farmer.farmName = farmName;
-      farmer.farmLocation = farmLocation;
-      farmer.farmingMethod = farmingMethod;
-      farmer.cropTypes = cropTypes;
-      farmer.deliveryRadius = deliveryRadius || farmer.deliveryRadius;
-      farmer.documents = documents || farmer.documents;
-      farmer.bankDetails = bankDetails || farmer.bankDetails;
+      farmer.farmName = farmName || farmer.farmName;
+      farmer.farmLocation = farmLocation || farmer.farmLocation;
+      farmer.farmingMethod = farmingMethod || farmer.farmingMethod;
+      farmer.cropTypes = cropTypes || farmer.cropTypes;
+      farmer.deliveryRadius = deliveryRadius !== undefined ? deliveryRadius : farmer.deliveryRadius;
+      if (documents) farmer.documents = documents;
+      if (bankDetails) farmer.bankDetails = bankDetails;
     } else {
       // Create new profile
       farmer = new Farmer({
@@ -55,7 +63,7 @@ router.post('/profile', auth, authorize('farmer'), [
         farmLocation,
         farmingMethod,
         cropTypes,
-        deliveryRadius,
+        deliveryRadius: deliveryRadius || 10,
         documents,
         bankDetails
       });
@@ -68,8 +76,8 @@ router.post('/profile', auth, authorize('farmer'), [
       farmer
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Farmer profile save error:', error);
+    res.status(500).json({ message: 'Failed to save farmer profile. Please try again.' });
   }
 });
 

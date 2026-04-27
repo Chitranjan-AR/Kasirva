@@ -22,21 +22,20 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.identifier.trim() || !formData.password) {
+      toast.error('Please fill in all fields');
+      return;
+    }
     setLoading(true);
-
     try {
       const response = await login(formData);
-      toast.success('Login successful!');
-      
-      if (response.user.role === 'farmer') {
-        navigate('/farmer/dashboard');
-      } else if (response.user.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      toast.success('Welcome back! 👋');
+      if (response.user.role === 'farmer') navigate('/farmer/dashboard');
+      else if (response.user.role === 'admin') navigate('/admin/dashboard');
+      else navigate('/products');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Login failed');
+      const errorMessage = error.response?.data?.message || 'Invalid credentials. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

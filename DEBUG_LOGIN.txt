@@ -1,0 +1,38 @@
+// Add this temporarily to Login.js to debug
+
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  console.log('=== LOGIN DEBUG ===');
+  console.log('Form Data:', formData);
+  console.log('API URL:', process.env.REACT_APP_API_URL);
+  
+  if (!formData.identifier.trim() || !formData.password) {
+    toast.error('Please fill in all fields');
+    return;
+  }
+  
+  setLoading(true);
+
+  try {
+    console.log('Sending login request...');
+    const response = await login(formData);
+    console.log('Login response:', response);
+    toast.success('Login successful!');
+    
+    if (response.user.role === 'farmer') {
+      navigate('/farmer/dashboard');
+    } else if (response.user.role === 'admin') {
+      navigate('/admin/dashboard');
+    } else {
+      navigate('/dashboard');
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    console.error('Error response:', error.response);
+    const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
+    toast.error(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};

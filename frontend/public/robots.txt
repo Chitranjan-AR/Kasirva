@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /farmer/dashboard
+Disallow: /api/
+
+Sitemap: https://kshirva.com/sitemap.xml

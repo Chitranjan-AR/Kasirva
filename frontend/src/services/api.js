@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
 
 // Create axios instance
 const api = axios.create({
@@ -70,6 +70,16 @@ export const productAPI = {
   }),
 };
 
+// User/Address API
+export const userAPI = {
+  getAddresses:    ()           => api.get('/users/addresses'),
+  addAddress:      (data)       => api.post('/users/addresses', data),
+  updateAddress:   (id, data)   => api.put(`/users/addresses/${id}`, data),
+  deleteAddress:   (id)         => api.delete(`/users/addresses/${id}`),
+  setDefault:      (id)         => api.put(`/users/addresses/${id}/default`),
+  getProfile:      ()           => api.get('/users/profile'),
+};
+
 // Order API
 export const orderAPI = {
   create: (orderData) => api.post('/orders', orderData),
@@ -79,6 +89,7 @@ export const orderAPI = {
   getFarmerOrders: () => api.get('/orders/farmer/my-orders'),
   getConsumerOrders: () => api.get('/orders/consumer/my-orders'),
   addReview: (id, review) => api.post(`/orders/${id}/review`, review),
+  cancelOrder: (id, reason) => api.put(`/orders/${id}/cancel`, { reason }),
 };
 
 // Payment API
@@ -95,6 +106,10 @@ export const adminAPI = {
   rejectFarmer: (id, reason) => api.put(`/admin/farmers/${id}/reject`, { reason }),
   getUsers: (params) => api.get('/admin/users', { params }),
   toggleUserStatus: (id) => api.put(`/admin/users/${id}/toggle-status`),
+  getProducts: (params) => api.get('/admin/products', { params }),
+  createProduct: (data) => api.post('/admin/products', data),
+  toggleProductStatus: (id) => api.put(`/admin/products/${id}/toggle-status`),
+  deleteProduct: (id) => api.delete(`/admin/products/${id}`),
 };
 
 export default api;

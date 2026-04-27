@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
@@ -52,30 +52,36 @@ const authReducer = (state, action) => {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Load user on app start
-  useEffect(() => {
-    if (state.token) {
-      loadUser();
-    } else {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  }, []);
-
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
       const response = await authAPI.getProfile();
       dispatch({ type: 'USER_LOADED', payload: response.data });
     } catch (error) {
       dispatch({ type: 'AUTH_ERROR' });
     }
-  };
+  }, []);
+
+  // Load user on app start — depend on token from localStorage, not state
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      loadUser();
+    } else {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [loadUser]);
 
   const login = async (credentials) => {
     try {
       const response = await authAPI.login(credentials);
-      dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
-      return response.data;
+      if (response.data && response.data.token) {
+        dispatch({ type: 'LOGIN_SUCCESS', payload: response.data });
+        return response.data;
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
+      console.error('Login error in context:', error);
       dispatch({ type: 'AUTH_ERROR' });
       throw error;
     }

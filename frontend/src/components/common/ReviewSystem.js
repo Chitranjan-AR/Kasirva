@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -10,13 +10,9 @@ const ReviewSystem = ({ productId, currentRating = 0, reviewCount = 0 }) => {
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
-  useEffect(() => {
-    fetchReviews();
-  }, [productId]);
-
-  const fetchReviews = async () => {
+  const fetchReviews = useCallback(async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products/${productId}/reviews`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products/${productId}/reviews`);
       if (response.ok) {
         const data = await response.json();
         setReviews(data.reviews || []);
@@ -24,7 +20,11 @@ const ReviewSystem = ({ productId, currentRating = 0, reviewCount = 0 }) => {
     } catch (error) {
       console.error('Failed to fetch reviews');
     }
-  };
+  }, [productId]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   const submitReview = async (e) => {
     e.preventDefault();
@@ -35,7 +35,7 @@ const ReviewSystem = ({ productId, currentRating = 0, reviewCount = 0 }) => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/products/${productId}/reviews`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/products/${productId}/reviews`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

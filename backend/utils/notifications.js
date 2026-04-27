@@ -33,13 +33,13 @@ const sendOTP = async (phone, otp) => {
     }
 
     await twilioClient.messages.create({
-      body: `Your Kashirva verification code is: ${otp}. Valid for 10 minutes.`,
+      body: `Your Kshirva verification code is: ${otp}. Valid for 10 minutes.`,
       from: process.env.TWILIO_PHONE_NUMBER,
       to: phone
     });
   } catch (error) {
-    console.error('SMS sending error:', error);
-    throw error;
+    console.error('SMS sending error:', error.message);
+    // Don't throw — SMS failure should not block registration
   }
 };
 

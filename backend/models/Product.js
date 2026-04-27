@@ -22,12 +22,13 @@ const productSchema = new mongoose.Schema({
   },
   subcategory: {
     type: String,
-    required: true
+    required: false
   },
   images: [{
     url: {
       type: String,
-      required: true
+      required: false,
+      default: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500'
     },
     alt: String
   }],
@@ -62,13 +63,15 @@ const productSchema = new mongoose.Schema({
   freshness: {
     harvestDate: {
       type: Date,
-      required: true
+      required: false,
+      default: Date.now
     },
     expiryDate: Date,
     freshnessScore: {
       type: Number,
       min: 0,
-      max: 100
+      max: 100,
+      default: 95
     }
   },
   farmingDetails: {

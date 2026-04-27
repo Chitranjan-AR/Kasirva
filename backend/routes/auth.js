@@ -56,16 +56,15 @@ router.post('/register', [
 
     await user.save();
 
-    // Generate OTP for verification
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.otp = {
-      code: otp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
-    };
-    await user.save();
-
-    // Send OTP
-    await sendOTP(phone, otp);
+    // Generate OTP for verification (non-blocking)
+    try {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      user.otp = { code: otp, expiresAt: new Date(Date.now() + 10 * 60 * 1000) };
+      await user.save();
+      await sendOTP(phone, otp);
+    } catch (otpError) {
+      console.error('OTP send error (non-critical):', otpError.message);
+    }
 
     const token = generateToken(user._id);
 
@@ -97,7 +96,10 @@ router.post('/login', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ 
+        message: errors.array()[0].msg,
+        errors: errors.array() 
+      });
     }
 
     const { identifier, password } = req.body;
@@ -105,23 +107,24 @@ router.post('/login', [
     // Find user by email or phone
     const user = await User.findOne({
       $or: [
-        { email: identifier },
-        { phone: identifier }
+        { email: identifier.toLowerCase().trim() },
+        { phone: identifier.trim() }
       ]
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(400).json({ message: 'Invalid email/phone or password' });
+    }
+
+    // Check if account is active
+    if (!user.isActive) {
+      return res.status(400).json({ message: 'Account is deactivated. Please contact support.' });
     }
 
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid credentials' });
-    }
-
-    if (!user.isActive) {
-      return res.status(400).json({ message: 'Account is deactivated' });
+      return res.status(400).json({ message: 'Invalid email/phone or password' });
     }
 
     const token = generateToken(user._id);
@@ -135,12 +138,13 @@ router.post('/login', [
         email: user.email,
         phone: user.phone,
         role: user.role,
-        isVerified: user.isVerified
+        isVerified: user.isVerified,
+        avatar: user.avatar
       }
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error. Please try again later.' });
   }
 });
 
@@ -159,12 +163,20 @@ router.post('/verify-otp', auth, [
     const { otp } = req.body;
     const user = await User.findById(req.user.id);
 
-    if (!user.otp || user.otp.code !== otp) {
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!user.otp) {
+      return res.status(400).json({ message: 'No OTP found. Please request a new one.' });
+    }
+
+    if (user.otp.code !== otp) {
       return res.status(400).json({ message: 'Invalid OTP' });
     }
 
     if (user.otp.expiresAt < new Date()) {
-      return res.status(400).json({ message: 'OTP has expired' });
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
     }
 
     user.isVerified = true;
@@ -173,8 +185,8 @@ router.post('/verify-otp', auth, [
 
     res.json({ message: 'Phone number verified successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('OTP verification error:', error);
+    res.status(500).json({ message: 'Server error. Please try again later.' });
   }
 });
 
@@ -185,6 +197,10 @@ router.post('/resend-otp', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
 
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = {
       code: otp,
@@ -192,12 +208,17 @@ router.post('/resend-otp', auth, async (req, res) => {
     };
     await user.save();
 
-    await sendOTP(user.phone, otp);
+    try {
+      await sendOTP(user.phone, otp);
+    } catch (notificationError) {
+      console.error('OTP notification error:', notificationError);
+      return res.status(500).json({ message: 'Failed to send OTP. Please try again.' });
+    }
 
     res.json({ message: 'OTP sent successfully' });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Resend OTP error:', error);
+    res.status(500).json({ message: 'Server error. Please try again later.' });
   }
 });
 

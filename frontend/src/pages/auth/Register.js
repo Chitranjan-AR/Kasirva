@@ -41,11 +41,12 @@ const Register = () => {
 
     try {
       const { confirmPassword, ...registerData } = formData;
-      await register(registerData);
-      toast.success('Registration successful! Please verify your phone number.');
-      navigate('/verify-otp');
+      const response = await register(registerData);
+      toast.success('Account created successfully! Welcome to Kshirva 🎉');
+      if (response.user.role === 'farmer') navigate('/farmer/dashboard');
+      else navigate('/products');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

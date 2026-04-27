@@ -19,27 +19,20 @@ const razorpay = process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
 // @access  Private
 router.post('/create-order', auth, async (req, res) => {
   try {
+    if (!razorpay)
+      return res.status(503).json({ message: 'Online payment not configured. Please use Cash on Delivery.' });
+
     const { amount, orderId } = req.body;
-
-    if (!razorpay) {
-      return res.status(500).json({ message: 'Payment gateway not configured' });
-    }
-
     const options = {
-      amount: amount * 100, // Convert to paise
+      amount: Math.round(amount * 100),
       currency: 'INR',
       receipt: `order_${orderId}`,
       payment_capture: 1
     };
 
     const razorpayOrder = await razorpay.orders.create(options);
-
-    // Update order with Razorpay order ID
-    if (orderId) {
-      await Order.findByIdAndUpdate(orderId, {
-        'payment.razorpayOrderId': razorpayOrder.id
-      });
-    }
+    if (orderId)
+      await Order.findByIdAndUpdate(orderId, { 'payment.razorpayOrderId': razorpayOrder.id });
 
     res.json({
       orderId: razorpayOrder.id,
@@ -113,20 +106,78 @@ router.post('/verify', auth, async (req, res) => {
 router.get('/orders/:orderId', auth, async (req, res) => {
   try {
     const order = await Order.findById(req.params.orderId);
-    
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
-
-    // Check access
-    if (order.consumer.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.consumer.toString() !== req.user.id && req.user.role !== 'admin')
       return res.status(403).json({ message: 'Access denied' });
-    }
+    res.json({ payment: order.payment, total: order.pricing.total });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-    res.json({
-      payment: order.payment,
-      total: order.pricing.total
+// @route   POST /api/payments/refund/:orderId
+// @desc    Initiate refund for cancelled order
+// @access  Private
+router.post('/refund/:orderId', auth, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.orderId);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (order.consumer.toString() !== req.user.id && req.user.role !== 'admin')
+      return res.status(403).json({ message: 'Access denied' });
+    if (order.status.current !== 'cancelled')
+      return res.status(400).json({ message: 'Refund only allowed for cancelled orders' });
+    if (order.payment.status === 'refunded')
+      return res.status(400).json({ message: 'Refund already processed' });
+    if (order.payment.method === 'cod' || order.payment.status !== 'completed')
+      return res.status(400).json({ message: 'No payment to refund' });
+
+    if (!razorpay)
+      return res.status(500).json({ message: 'Payment gateway not configured' });
+
+    const refund = await razorpay.payments.refund(order.payment.razorpayPaymentId, {
+      amount: Math.round(order.pricing.total * 100),
+      notes: { orderId: order._id.toString(), reason: req.body.reason || 'Order cancelled' }
     });
+
+    order.payment.status = 'refunded';
+    order.payment.transactionId = refund.id;
+    order.cancellation = {
+      ...order.cancellation,
+      refundAmount: order.pricing.total,
+      refundId: refund.id
+    };
+    await order.save();
+
+    res.json({ message: 'Refund initiated successfully', refundId: refund.id, amount: order.pricing.total });
+  } catch (error) {
+    console.error('Refund error:', error);
+    res.status(500).json({ message: 'Refund failed. Please contact support.' });
+  }
+});
+
+// @route   PUT /api/payments/cod-confirm/:orderId
+// @desc    Confirm COD payment on delivery
+// @access  Private (Farmer only)
+router.put('/cod-confirm/:orderId', auth, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.orderId).populate('farmer');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    const Farmer = require('../models/Farmer');
+    const farmer = await Farmer.findOne({ user: req.user.id });
+    if (!farmer || order.farmer._id.toString() !== farmer._id.toString())
+      return res.status(403).json({ message: 'Access denied' });
+    if (order.payment.method !== 'cod')
+      return res.status(400).json({ message: 'Not a COD order' });
+    if (order.status.current !== 'delivered')
+      return res.status(400).json({ message: 'Order must be delivered first' });
+
+    order.payment.status = 'completed';
+    order.payment.paidAt = new Date();
+    await order.save();
+
+    res.json({ message: 'COD payment confirmed', order });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

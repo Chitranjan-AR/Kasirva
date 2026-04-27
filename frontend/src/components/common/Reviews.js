@@ -11,7 +11,7 @@ const ReviewModal = ({ isOpen, onClose, order, onReviewSubmitted }) => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/orders/${order._id}/review`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001/api'}/orders/${order._id}/review`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

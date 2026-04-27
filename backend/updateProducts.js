@@ -96,7 +96,7 @@ async function updateProducts() {
   const client = new MongoClient(uri);
   try {
     await client.connect();
-    const db = client.db('kashirva');
+    const db = client.db('kshirva');
     
     // Clear existing products
     await db.collection('products').deleteMany({});

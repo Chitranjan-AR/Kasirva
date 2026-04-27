@@ -2,17 +2,66 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
     <meta name="theme-color" content="#16a34a" />
-    <meta name="description" content="Local Farm-to-Consumer Marketplace - Fresh produce directly from farmers" />
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Kshirva - Buy fresh organic produce directly from local farmers. Farm-to-consumer marketplace connecting farmers with consumers for fresh vegetables, fruits, dairy, and grains." />
+    <meta name="keywords" content="farm to consumer, organic produce, fresh vegetables, local farmers, farm marketplace, organic food, fresh fruits, dairy products, online grocery, farm fresh" />
+    <meta name="author" content="Kshirva" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://kshirva.com" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kshirva.com" />
+    <meta property="og:title" content="Kshirva - Farm to Consumer Marketplace" />
+    <meta property="og:description" content="Buy fresh organic produce directly from local farmers. Connect with verified farmers for farm-fresh vegetables, fruits, dairy, and more." />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.jpg" />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://kshirva.com" />
+    <meta property="twitter:title" content="Kshirva - Farm to Consumer Marketplace" />
+    <meta property="twitter:description" content="Buy fresh organic produce directly from local farmers" />
+    <meta property="twitter:image" content="%PUBLIC_URL%/twitter-image.jpg" />
+    
+    <!-- Mobile Optimization -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Kshirva" />
+    
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>Kshirva - Farm to Consumer Marketplace</title>
+    
+    <!-- Preconnect for Performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    
+    <title>Kshirva - Fresh Organic Produce from Local Farmers | Farm to Consumer Marketplace</title>
+    
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Kshirva",
+      "url": "https://kshirva.com",
+      "description": "Farm-to-consumer marketplace for fresh organic produce",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://kshirva.com/products?search={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <!-- Razorpay Payment Gateway -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   </body>
 </html>

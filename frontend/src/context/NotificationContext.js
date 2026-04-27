@@ -12,52 +12,72 @@ export const NotificationProvider = ({ children }) => {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Initialize socket connection
-      const newSocket = io(process.env.REACT_APP_API_URL || 'http://localhost:5000');
-      setSocket(newSocket);
+      try {
+        // Initialize socket connection with proper URL
+        const socketURL = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:5001';
+        const newSocket = io(socketURL, {
+          reconnection: true,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          reconnectionAttempts: 5
+        });
+        
+        setSocket(newSocket);
 
-      // Join user room for real-time notifications
-      newSocket.emit('join-room', user.id);
+        // Handle connection errors
+        newSocket.on('connect_error', (error) => {
+          console.error('Socket connection error:', error);
+        });
 
-      // Listen for notifications
-      newSocket.on('new_order', (data) => {
-        if (user.role === 'farmer') {
-          toast.success(`New order received: #${data.orderNumber}`);
-          addNotification({
-            type: 'order',
-            title: 'New Order',
-            message: `Order #${data.orderNumber} for ₹${data.total}`,
-            data: data
-          });
-        }
-      });
+        // Join user room for real-time notifications
+        newSocket.emit('join-room', user.id);
 
-      newSocket.on('order_update', (data) => {
-        if (user.role === 'consumer') {
-          toast.success(data.message);
-          addNotification({
-            type: 'order_update',
-            title: 'Order Update',
-            message: data.message,
-            data: data
-          });
-        }
-      });
+        // Listen for notifications
+        newSocket.on('new_order', (data) => {
+          if (user.role === 'farmer' && data && data.orderNumber) {
+            toast.success(`New order received: #${data.orderNumber}`);
+            addNotification({
+              type: 'order',
+              title: 'New Order',
+              message: `Order #${data.orderNumber} for ₹${data.total}`,
+              data: data
+            });
+          }
+        });
 
-      newSocket.on('farmer_approved', () => {
-        if (user.role === 'farmer') {
-          toast.success('Your farmer profile has been approved!');
-          addNotification({
-            type: 'approval',
-            title: 'Profile Approved',
-            message: 'Your farmer profile has been approved. You can now start selling!'
-          });
-        }
-      });
+        newSocket.on('order_update', (data) => {
+          if (user.role === 'consumer' && data && data.message) {
+            toast.success(data.message);
+            addNotification({
+              type: 'order_update',
+              title: 'Order Update',
+              message: data.message,
+              data: data
+            });
+          }
+        });
 
-      return () => {
-        newSocket.close();
-      };
+        newSocket.on('farmer_approved', () => {
+          if (user.role === 'farmer') {
+            toast.success('Your farmer profile has been approved!');
+            addNotification({
+              type: 'approval',
+              title: 'Profile Approved',
+              message: 'Your farmer profile has been approved. You can now start selling!'
+            });
+          }
+        });
+
+        return () => {
+          newSocket.off('new_order');
+          newSocket.off('order_update');
+          newSocket.off('farmer_approved');
+          newSocket.off('connect_error');
+          newSocket.close();
+        };
+      } catch (error) {
+        console.error('Notification setup error:', error);
+      }
     }
   }, [isAuthenticated, user]);
 
